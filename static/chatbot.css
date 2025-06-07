@@ -1,0 +1,89 @@
+/* Chatbot Widget at bottom right */
+.swin-chatbot-widget {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 9999;
+  font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+}
+
+.swin-chatbot-box {
+  width: 380px;
+  max-width: 98vw;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(44,62,80,0.18), 0 1.5px 6px rgba(44,62,80,0.08);
+  padding: 2rem 1.5rem 1.5rem 1.5rem;
+  border: 1.5px solid #e5e7eb;
+  border-top: 5px solid #e4002b;
+  transition: box-shadow 0.2s;
+}
+
+.swin-title {
+  color: #e4002b;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-align: center;
+  margin-bottom: 18px;
+  font-size: 2rem;
+  text-shadow: 0 1px 0 #fff, 0 2px 8px #e4002b22;
+}
+
+.form-label {
+  font-weight: 500;
+  font-size: 1.05rem;
+  margin-bottom: 0.5rem;
+  color: #22223b;
+}
+
+.form-control {
+  font-size: 1.1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1.5px solid #e5e7eb;
+  background: #f8fafc;
+  transition: border 0.2s, box-shadow 0.2s, background 0.2s;
+  box-shadow: none;
+}
+
+.form-control:focus {
+  border-color: #e4002b;
+  outline: none;
+  background: #fff;
+  box-shadow: 0 0 0 2px #e4002b22;
+}
+
+.btn-swin {
+  background: linear-gradient(90deg, #e4002b 60%, #b30022 100%);
+  color: #fff;
+  border: none;
+  width: 100%;
+  font-size: 1.1rem;
+  padding: 0.75rem 0;
+  border-radius: 10px;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  box-shadow: 0 2px 8px #e4002b22;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.btn-swin:hover, .btn-swin:focus {
+  background: linear-gradient(90deg, #b30022 60%, #e4002b 100%);
+  color: #fff;
+  box-shadow: 0 4px 16px #e4002b33;
+  transform: scale(1.03);
+}
+
+.answer-box {
+  background: linear-gradient(90deg, #f8fafc 80%, #ffe5ea 100%);
+  border-left: 4px solid #e4002b;
+  padding: 1.25rem 1rem;
+  margin-top: 1.5rem;
+  border-radius: 10px;
+  min-height: 60px;
+  font-size: 1.08rem;
+  color: #22223b;
+  box-shadow: 0 1px 4px #e4002b11;
+  word-break: break-word;
+}
