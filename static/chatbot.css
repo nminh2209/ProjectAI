@@ -284,14 +284,34 @@
 }
 
 /* === Login Form Section === */
-.swin-login-form {
-  margin: 1.5rem;
-  padding: 1rem;
-  border-radius: 10px;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  text-align: center;
-}
+.swin-login-form form {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem 2rem;
+    }
+    .swin-login-form input {
+       width: calc(100% - 3rem);
+  margin: 0 1.5rem 1rem;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+     .swin-login-form .register-link {
+      font-size: 0.95rem;
+      color: #666;
+      margin-top: 0.75rem;
+    }
+    .swin-login-form .register-link a {
+      color: #e4002b;
+      text-decoration: none;
+    }
+    .swin-login-form .register-link a:hover {
+      text-decoration: underline;
+    }
 
 .swin-login-form input[type="email"] {
   width: calc(100% - 3rem);
@@ -325,4 +345,26 @@
 .swin-login-form .btn-swin:hover {
   background-color: #b30022;
 }
+
+ .autocomplete-box {
+      list-style: none;
+      margin: 0 1.5rem;
+      padding: 0;
+      background: #fff;
+      border: 1px solid #ccc;
+      max-height: 150px;
+      overflow-y: auto;
+      border-radius: 6px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      z-index: 10;
+      position: absolute;
+      width: calc(100% - 3rem);
+    }
+    .autocomplete-box li {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .autocomplete-box li:hover {
+      background: #f2f2f2;
+    }
 

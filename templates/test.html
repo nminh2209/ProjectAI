@@ -2982,7 +2982,7 @@ blockquote {
 </script>
 
 
-<!-- Floating Button -->
+   <!-- Floating Button -->
   <button class="swin-toggle-button" id="chatbot-toggle">💬</button>
 
   <!-- Chatbot Panel -->
@@ -2995,7 +2995,9 @@ blockquote {
       <div id="login-section" class="swin-login-form">
         <form id="login-form">
           <input type="email" name="email" placeholder="Nhập email của bạn" required />
+          <input type="password" name="password" placeholder="Nhập mật khẩu của bạn" required />
           <button type="submit" class="btn-swin">Đăng nhập</button>
+          <div class="register-link">Chưa có tài khoản? <a href="#" onclick="alert('Chức năng đăng ký sẽ được cập nhật sau.')">Đăng ký</a></div>
         </form>
       </div>
 
@@ -3004,6 +3006,7 @@ blockquote {
         <label class="form-label" for="chat-question">Câu hỏi của bạn</label>
         <input type="text" name="question" id="chat-question" class="form-control"
                placeholder="Viết câu hỏi của bạn ở đây..." required />
+        <ul id="suggestions" class="autocomplete-box hidden"></ul>
         <button type="submit" class="btn-swin">Gửi câu hỏi</button>
       </form>
 
@@ -3063,6 +3066,8 @@ blockquote {
       const feedbackBox = document.getElementById('chatbot-feedback');
       const thankYouMsg = document.getElementById('thank-you-msg');
       const formSuccess = document.getElementById('form-success');
+      const suggestionBox = document.getElementById('suggestions');
+      const input = document.getElementById('chat-question');
 
       toggleBtn.addEventListener('click', () => {
         chatbotBox.classList.toggle('hidden');
@@ -3077,17 +3082,19 @@ blockquote {
       loginForm?.addEventListener("submit", async function (e) {
         e.preventDefault();
         const email = loginForm.email.value;
+        const password = loginForm.password.value;
 
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email, password })
         });
 
         const result = await res.json();
         if (result.status === 'success') {
           loginSection.classList.add('hidden');
           chatbotForm.classList.remove('hidden');
+          sessionStorage.setItem('userEmail', email);
         } else {
           alert('Đăng nhập thất bại. Vui lòng thử lại.');
         }
@@ -3096,6 +3103,8 @@ blockquote {
       chatbotForm?.addEventListener('submit', async function (e) {
         e.preventDefault();
         const question = document.getElementById('chat-question').value;
+        const email = sessionStorage.getItem('userEmail') || 'anonymous';
+
         answerBox.classList.add('hidden');
         feedbackBox.classList.add('hidden');
         answerText.innerHTML = 'Đang trả lời...';
@@ -3103,7 +3112,7 @@ blockquote {
         const response = await fetch('/api/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question })
+          body: JSON.stringify({ question, email })
         });
 
         const data = await response.json();
@@ -3117,13 +3126,56 @@ blockquote {
         e.preventDefault();
         formSuccess.classList.remove('hidden');
       });
+
+      function handleSuggestionBox(query) {
+        if (!query) {
+          suggestionBox.classList.add('hidden');
+          return;
+        }
+
+        fetch('/data/faqs.json')
+          .then(res => res.json())
+          .then(data => {
+            const matches = data.faqs
+              .map(f => f.question)
+              .filter(q => q.toLowerCase().includes(query.toLowerCase()))
+              .slice(0, 5);
+
+            if (matches.length === 0) {
+              suggestionBox.classList.add('hidden');
+              return;
+            }
+
+            suggestionBox.innerHTML = '';
+            matches.forEach(match => {
+              const li = document.createElement('li');
+              li.textContent = match;
+              li.onclick = () => {
+                input.value = match;
+                suggestionBox.classList.add('hidden');
+              };
+              suggestionBox.appendChild(li);
+            });
+            suggestionBox.classList.remove('hidden');
+          });
+      }
+
+      input.addEventListener('input', () => {
+        const val = input.value.trim();
+        handleSuggestionBox(val);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!suggestionBox.contains(e.target) && e.target !== input) {
+          suggestionBox.classList.add('hidden');
+        }
+      });
     });
 
     function handleFeedback(isPositive) {
       document.getElementById('thank-you-msg').classList.remove('hidden');
     }
   </script>
-
 </body>
 </html>
 <!-- Page optimized by LiteSpeed Cache @2025-06-01 08:50:11 -->
