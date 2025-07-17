@@ -5,22 +5,23 @@ import google.generativeai as genai
 import os
 import json
 
-# === App Configuration ===
+# === Flask App Config ===
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chatbot.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# === Gemini API Setup ===
+# === Gemini AI Setup ===
 genai.configure(api_key="AIzaSyAzsMfSo_LqpnwI6eBcxgW1ZbnCGcXfnDA")
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-# === Database Models ===
+# === Models ===
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
+    name = db.Column(db.String(120), nullable=False)  # ✅ added
 
 class QuestionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -29,14 +30,10 @@ class QuestionLog(db.Model):
     answer = db.Column(db.Text)
     is_faq = db.Column(db.Boolean, default=False)
 
-# === Load FAQs ===
+# === Load Static FAQs ===
 def load_faqs():
-    try:
-        with open(os.path.join('data', 'faqs.json'), 'r', encoding='utf-8') as f:
-            return json.load(f).get("faqs", [])
-    except Exception as e:
-        print("Failed to load FAQs:", e)
-        return []
+    with open(os.path.join('data', 'faqs.json'), 'r', encoding='utf-8') as f:
+        return json.load(f)["faqs"]
 
 faqs = load_faqs()
 
@@ -50,18 +47,20 @@ def register():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
+    name = data.get('name')
 
-    if not email or not password:
-        return jsonify({'status': 'fail', 'message': 'Missing fields'})
+    if not all([email, password, name]):
+        return jsonify({'status': 'fail', 'message': 'Thiếu thông tin đăng ký'}), 400
 
     if User.query.filter_by(email=email).first():
-        return jsonify({'status': 'exists', 'message': 'Email already registered'})
+        return jsonify({'status': 'exists', 'message': 'Email đã tồn tại'})
 
-    hashed = generate_password_hash(password)
-    new_user = User(email=email, password_hash=hashed)
+    hashed_pw = generate_password_hash(password)
+    new_user = User(email=email, password_hash=hashed_pw, name=name)
     db.session.add(new_user)
     db.session.commit()
-    return jsonify({'status': 'registered'})
+
+    return jsonify({'status': 'success'})
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -73,7 +72,7 @@ def login():
     if user and check_password_hash(user.password_hash, password):
         session['user_email'] = email
         return jsonify({'status': 'success'})
-    return jsonify({'status': 'fail', 'message': 'Invalid credentials'})
+    return jsonify({'status': 'fail', 'message': 'Sai email hoặc mật khẩu'})
 
 @app.route('/api/ask', methods=['POST'])
 def ask():
@@ -83,23 +82,26 @@ def ask():
     answer = None
     is_faq = False
 
+    # Static FAQ Match
     for faq in faqs:
         if isinstance(faq, dict):
-            faq_question = faq.get('question', '').lower()
-            if question in faq_question:
-                answer = faq.get('answer', 'No answer available.').replace('*', '<br>')
+            faq_question = faq.get('question', '')
+            if question in faq_question.lower():
+                answer = faq.get('answer', 'Không có câu trả lời.').replace('*', '<br>')
                 is_faq = True
                 break
 
+    # AI fallback
     if not answer:
         prompt = (
-            "You are a helpful assistant for Swinburne VietNam Admission Service. "
-            "If you don't know the answer, say you will contact the HQ team (in Vietnamese). "
-            f"User question: {question}"
+            "Bạn là một trợ lý hữu ích cho dịch vụ tuyển sinh Swinburne Việt Nam. "
+            "Nếu không chắc chắn câu trả lời, hãy nói rằng bạn sẽ liên hệ với bộ phận tuyển sinh. "
+            f"Câu hỏi: {question}"
         )
         response = model.generate_content(prompt)
         answer = response.text.replace('*', '<br>')
 
+    # Save Q&A to database
     log = QuestionLog(email=email, question=question, answer=answer, is_faq=is_faq)
     db.session.add(log)
     db.session.commit()
@@ -111,14 +113,16 @@ def save_unanswered():
     data = request.get_json()
     question = data.get('question')
     email = session.get('user_email', 'guest')
+
     log = QuestionLog(email=email, question=question, answer='', is_faq=False)
     db.session.add(log)
     db.session.commit()
+
     return jsonify({'status': 'saved'})
 
-# === Run Server ===
+# === Main ===
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    print("✅ Flask server running with database support...")
+    print("✅ Flask server running on http://localhost:5000")
     app.run(debug=True)
