@@ -13,7 +13,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # === Gemini API Setup ===
-genai.configure(api_key="")
+genai.configure(api_key="AIzaSyAzsMfSo_LqpnwI6eBcxgW1ZbnCGcXfnDA")
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
 # === Database Models ===
