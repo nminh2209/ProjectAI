@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail,Message
 from dotenv import load_dotenv
+from flask_cors import CORS
 import google.generativeai as genai
 import os
 import json
@@ -15,7 +16,14 @@ app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chatbot.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# ✅ Initialize SQLAlchemy only once
 db = SQLAlchemy(app)
+
+# ✅ Initialize CORS
+CORS(app, supports_credentials=True)
+
+# ✅ Remove the duplicate db = SQLAlchemy(app) line
 
 # === Mail Config ===
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -25,6 +33,8 @@ app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 mail = Mail(app)
+
+
 
 # === Gemini AI Setup ===
 genai.configure(api_key="AIzaSyAzsMfSo_LqpnwI6eBcxgW1ZbnCGcXfnDA")
