@@ -691,7 +691,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
           <input type="text" name="name" placeholder="Tên của bạn" required class="form-control mb-2" />
         </div>
         <div class="swin-register-footer">
-          <button type="button" id="registerCloseBtn" class="btn-swin" title="Đăng Ký">Đăng Ký</button>
+          <button type="submit" id="registerCloseBtn" class="btn-swin" title="Đăng Ký">Đăng Ký</button>
         </div>
       </form>
     </div>
@@ -907,9 +907,36 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   // Admin contact form
-  document.getElementById('admin-contact-form')?.addEventListener('submit', (e) => {
+  document.getElementById('admin-contact-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    formSuccess.classList.remove('hidden');
+    const form = e.target;
+    const formSuccess = document.getElementById('form-success')
+
+    const formData ={
+      name:form.name.value,
+      email:form.email.value,
+      message:form.message.value
+    };
+
+    try{
+      const response = await fetch('http://localhost:5000/api/contact-admin',{
+        method:'POST',
+        headers:{
+          'Content-Type': 'application/json'
+        },
+        body:JSON.stringify(formData)
+      });
+      if(response.ok){
+        formSuccess.classList.remove('hidden');
+        form.reset();
+      } else {
+        alert("Đã có lỗi xảy ra khi gửi yêu cầu.")
+      } 
+    } catch(err) {
+      console.error(err);
+      alert("Lỗi kết nối đến máy chủ.");
+    }
+    
   });
 
   // Suggestion autocompletion

@@ -1,9 +1,14 @@
 from flask import Flask, request, render_template, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_mail import Mail,Message
+from dotenv import load_dotenv
 import google.generativeai as genai
 import os
 import json
+
+# === Load .env ===
+load_dotenv()
 
 # === Flask App Config ===
 app = Flask(__name__)
@@ -11,6 +16,15 @@ app.secret_key = 'your-secret-key-here'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chatbot.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+
+# === Mail Config ===
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
+mail = Mail(app)
 
 # === Gemini AI Setup ===
 genai.configure(api_key="AIzaSyAzsMfSo_LqpnwI6eBcxgW1ZbnCGcXfnDA")
@@ -119,6 +133,32 @@ def save_unanswered():
     db.session.commit()
 
     return jsonify({'status': 'saved'})
+
+@app.route('/api/contact-admin', methods=['POST'])
+def contact_admin():
+    data = request.get_json()
+    name = data.get('name')
+    email = data.get('email')
+    message = data.get('message')
+
+    body = f"""
+    📬 Yêu cầu tư vấn mới:
+
+    👤 Họ tên: {name}
+    📧 Email: {email}
+    📝 Nội dung:
+    {message}
+    """
+
+    try:
+        msg = Message(subject="Liên hệ tư vấn từ người dùng",
+                      recipients=[os.getenv('ADMIN_RECEIVER')],
+                      body=body)
+        mail.send(msg)
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        print("❌ Lỗi gửi mail:", e)
+        return jsonify({'error': 'Gửi email thất bại'}), 500
 
 # === Main ===
 if __name__ == '__main__':
