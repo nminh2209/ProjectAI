@@ -1,7 +1,7 @@
 from flask import Flask, request, render_template, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_mail import Mail,Message
+from flask_mail import Mail, Message
 from dotenv import load_dotenv
 from flask_cors import CORS
 import google.generativeai as genai
@@ -38,12 +38,24 @@ mail = Mail(app)
 genai.configure(api_key="AIzaSyAzsMfSo_LqpnwI6eBcxgW1ZbnCGcXfnDA")
 model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
-# === Models ===
+# === Enhanced Models ===
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     name = db.Column(db.String(120), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+
+class FAQ(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    question = db.Column(db.Text, nullable=False)
+    answer = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(100), default='General')
+    keywords = db.Column(db.String(255))
+    is_active = db.Column(db.Boolean, default=True)
+    priority = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
 
 class QuestionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -51,27 +63,57 @@ class QuestionLog(db.Model):
     question = db.Column(db.Text)
     answer = db.Column(db.Text)
     is_faq = db.Column(db.Boolean, default=False)
+    faq_id = db.Column(db.Integer, db.ForeignKey('faq.id'), nullable=True)
+    match_score = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-# === Load Static FAQs ===
-def load_faqs():
+# === FAQ Management Functions ===
+def load_faqs_from_db():
+    """Load FAQs from database instead of JSON file"""
+    faqs = FAQ.query.filter_by(is_active=True).order_by(FAQ.priority.desc(), FAQ.created_at.desc()).all()
+    return [{'id': faq.id, 'question': faq.question, 'answer': faq.answer, 'category': faq.category, 'keywords': faq.keywords} for faq in faqs]
+
+def migrate_json_to_db():
+    """One-time migration from JSON to database"""
     try:
         with open(os.path.join('data', 'faqs.json'), 'r', encoding='utf-8') as f:
-            return json.load(f)["faqs"]
+            json_faqs = json.load(f)["faqs"]
+            
+        for faq_data in json_faqs:
+            existing = FAQ.query.filter_by(question=faq_data.get('question')).first()
+            if not existing:
+                new_faq = FAQ(
+                    question=faq_data.get('question', ''),
+                    answer=faq_data.get('answer', ''),
+                    category=faq_data.get('category', 'General')
+                )
+                db.session.add(new_faq)
+        
+        db.session.commit()
+        print(f"✅ Migrated {len(json_faqs)} FAQs to database")
     except FileNotFoundError:
-        print("❌ faqs.json not found, using empty FAQ list")
-        return []
+        print("📝 No JSON file found, starting with empty FAQ database")
 
-faqs = load_faqs()
+# Load FAQs from database
+faqs = []
 
 # === Routes ===
 @app.route('/')
 def index():
     return render_template('test.html')
 
+@app.route('/admin')
+def admin_panel():
+    if not session.get('is_admin'):
+        return render_template('admin_login.html')
+    return render_template('admin_panel.html')
+
 # ✅ Fix: Add route to serve FAQ data for frontend
 @app.route('/data/faqs.json')
 def serve_faqs():
     """Serve FAQ data for frontend autocomplete"""
+    global faqs
+    faqs = load_faqs_from_db()
     return jsonify({"faqs": faqs})
 
 @app.route('/api/register', methods=['POST'])
@@ -106,6 +148,24 @@ def login():
         return jsonify({'status': 'success'})
     return jsonify({'status': 'fail', 'message': 'Sai email hoặc mật khẩu'})
 
+@app.route('/admin/login', methods=['POST'])
+def admin_login():
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+
+    user = User.query.filter_by(email=email, is_admin=True).first()
+    if user and check_password_hash(user.password_hash, password):
+        session['admin_email'] = email
+        session['is_admin'] = True
+        return jsonify({'status': 'success'})
+    return jsonify({'status': 'fail', 'message': 'Invalid admin credentials'})
+
+@app.route('/api/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return jsonify({'status': 'success'})
+
 @app.route('/api/ask', methods=['POST'])
 def ask():
     data = request.get_json()
@@ -114,8 +174,13 @@ def ask():
     answer = None
     is_faq = False
     match_score = 0
+    faq_id = None
 
     print(f"🔍 User question: {question}")
+
+    # Load fresh FAQs from database
+    global faqs
+    faqs = load_faqs_from_db()
 
     # STEP 1: Enhanced FAQ Matching
     best_match = find_best_faq_match(question)
@@ -127,6 +192,7 @@ def ask():
             answer = answer.replace('*', '<br>')
             is_faq = True
             match_score = best_match['score']
+            faq_id = best_match.get('id')
             print(f"✅ FAQ Match: {best_match['score']}% - {best_match['question']}")
             print(f"✅ Using FAQ Answer: {answer[:100]}...")
         else:
@@ -140,11 +206,11 @@ def ask():
         faq_context = "\n".join([f"Q: {faq['question']}\nA: {faq['answer']}" for faq in faqs[:5] if faq.get('answer')])
         
         prompt = f"""
-        Bạn là trợ lý tuyển sinh Swinburne Việt Nam. Sử dụng thông tin FAQ sau để trả lời:
+        Bạn là trợ lý AI thông minh của Swinburne Việt Nam, hỗ trợ tuyển sinh. Sử dụng thông tin FAQ sau để trả lời:
 
         {faq_context}
 
-        Nếu câu hỏi không liên quan đến thông tin trên, hãy nói "Tôi sẽ chuyển cho bộ phận tuyển sinh để được hỗ trợ tốt hơn."
+        Nếu câu hỏi không liên quan đến Swinburne hoặc thông tin trên, hãy trả lời lịch sự và đề xuất liên hệ bộ phận tuyển sinh. Luôn thân thiện và chuyên nghiệp.
 
         Câu hỏi: {question}
         """
@@ -164,7 +230,9 @@ def ask():
         email=email, 
         question=question, 
         answer=answer, 
-        is_faq=is_faq
+        is_faq=is_faq,
+        faq_id=faq_id,
+        match_score=match_score
     )
     db.session.add(log)
     db.session.commit()
@@ -225,6 +293,7 @@ def find_best_faq_match(user_question):
         if combined_score > highest_score:
             highest_score = combined_score
             best_match = {
+                'id': faq.get('id'),
                 'question': faq.get('question', ''),
                 'answer': faq_answer,
                 'score': round(combined_score, 2)
@@ -272,10 +341,136 @@ def contact_admin():
         print("❌ Lỗi gửi mail:", e)
         return jsonify({'error': 'Gửi email thất bại'}), 500
 
+# === Admin Routes ===
+@app.route('/api/admin/faqs', methods=['GET'])
+def get_all_faqs():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    faqs = FAQ.query.order_by(FAQ.priority.desc(), FAQ.created_at.desc()).all()
+    return jsonify({
+        'faqs': [{
+            'id': faq.id,
+            'question': faq.question,
+            'answer': faq.answer,
+            'category': faq.category,
+            'keywords': faq.keywords,
+            'is_active': faq.is_active,
+            'priority': faq.priority,
+            'created_at': faq.created_at.strftime('%Y-%m-%d %H:%M:%S')
+        } for faq in faqs]
+    })
+
+@app.route('/api/admin/faqs', methods=['POST'])
+def add_faq():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.get_json()
+    new_faq = FAQ(
+        question=data.get('question'),
+        answer=data.get('answer'),
+        category=data.get('category', 'General'),
+        keywords=data.get('keywords', ''),
+        priority=data.get('priority', 0)
+    )
+    
+    db.session.add(new_faq)
+    db.session.commit()
+    
+    # Refresh FAQ cache
+    global faqs
+    faqs = load_faqs_from_db()
+    
+    return jsonify({'status': 'success', 'id': new_faq.id})
+
+@app.route('/api/admin/faqs/<int:faq_id>', methods=['PUT'])
+def update_faq(faq_id):
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.get_json()
+    faq = FAQ.query.get_or_404(faq_id)
+    
+    faq.question = data.get('question', faq.question)
+    faq.answer = data.get('answer', faq.answer)
+    faq.category = data.get('category', faq.category)
+    faq.keywords = data.get('keywords', faq.keywords)
+    faq.priority = data.get('priority', faq.priority)
+    faq.is_active = data.get('is_active', faq.is_active)
+    
+    db.session.commit()
+    
+    # Refresh FAQ cache
+    global faqs
+    faqs = load_faqs_from_db()
+    
+    return jsonify({'status': 'success'})
+
+@app.route('/api/admin/faqs/<int:faq_id>', methods=['DELETE'])
+def delete_faq(faq_id):
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    faq = FAQ.query.get_or_404(faq_id)
+    db.session.delete(faq)
+    db.session.commit()
+    
+    # Refresh FAQ cache
+    global faqs
+    faqs = load_faqs_from_db()
+    
+    return jsonify({'status': 'success'})
+
+@app.route('/api/admin/analytics')
+def get_analytics():
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Most asked questions
+    popular_questions = db.session.query(
+        QuestionLog.question, 
+        db.func.count(QuestionLog.id).label('count')
+    ).group_by(QuestionLog.question).order_by(db.func.count(QuestionLog.id).desc()).limit(10).all()
+    
+    # FAQ vs AI usage
+    faq_usage = QuestionLog.query.filter_by(is_faq=True).count()
+    ai_usage = QuestionLog.query.filter_by(is_faq=False).count()
+    
+    # Unanswered questions (low match scores)
+    unanswered = QuestionLog.query.filter(QuestionLog.match_score < 50).order_by(QuestionLog.created_at.desc()).limit(20).all()
+    
+    return jsonify({
+        'popular_questions': [{'question': q[0], 'count': q[1]} for q in popular_questions],
+        'usage_stats': {'faq_usage': faq_usage, 'ai_usage': ai_usage},
+        'unanswered': [{'question': q.question, 'created_at': q.created_at.strftime('%Y-%m-%d %H:%M:%S')} for q in unanswered]
+    })
+
 # === Main ===
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        
+        # Create admin user if doesn't exist
+        admin = User.query.filter_by(email='admin@swinburne.edu.vn').first()
+        if not admin:
+            admin = User(
+                email='admin@swinburne.edu.vn',
+                password_hash=generate_password_hash('admin123'),
+                name='Admin',
+                is_admin=True
+            )
+            db.session.add(admin)
+            db.session.commit()
+            print("✅ Created admin user: admin@swinburne.edu.vn / admin123")
+        
+        # Migrate JSON FAQs to database
+        migrate_json_to_db()
+        
+        # Load FAQs from database
+        faqs = load_faqs_from_db()
+    
     print("✅ Flask server running on http://localhost:5000")
-    print(f"✅ Loaded {len(faqs)} FAQs")
+    print("✅ Admin panel: http://localhost:5000/admin")
+    print(f"✅ Loaded {len(faqs)} FAQs from database")
     app.run(debug=True)
