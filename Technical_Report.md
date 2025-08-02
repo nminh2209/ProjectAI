@@ -105,6 +105,8 @@ The proposed solution is a web-based intelligent FAQ chatbot system that combine
 
 ### 3.2 Architecture Design
 
+#### 3.2.1 System Component Architecture
+
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   User Interface│    │  Admin Panel    │    │  Analytics      │
@@ -155,6 +157,121 @@ The proposed solution is a web-based intelligent FAQ chatbot system that combine
                     │   • Logging & Analytics     │
                     │   • User Session Management │
                     └─────────────────────────────┘
+```
+
+#### 3.2.2 System Interaction Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant WC as Web Client
+    participant FR as Flask Router
+    participant FM as FAQ Matching Engine
+    participant DB as Database
+    participant AI as Gemini AI
+
+    Note over U, AI: Main User Query Flow
+    
+    U->>WC: 1. Enter Question
+    WC->>FR: 2. POST /api/ask
+    FR->>FM: 3. Process & Validate Input
+    FM->>DB: 4. Fetch Active FAQs
+    DB-->>FM: 5. Return FAQ List
+    
+    Note over FM: 6. Calculate Similarity Scores:<br/>• Fuzzy Match (30%)<br/>• Partial Ratio (30%)<br/>• Token Sort (20%)<br/>• Keywords (20%)
+    
+    FM->>FM: 7. Check Score Threshold (≥70%?)
+    
+    alt Score ≥ 70% (FAQ Match)
+        FM->>DB: 8a. Log FAQ Response
+        FM->>FR: 9a. Return FAQ Answer (is_faq: true)
+        FR->>WC: FAQ Response
+        WC->>U: 13. Display FAQ Answer
+    else Score < 70% (AI Fallback)
+        FM->>FM: 8b. Prepare FAQ Context for AI
+        FM->>AI: 9b. Send Question with FAQ Context
+        AI-->>FM: 10b. AI Generated Response
+        FM->>DB: 11b. Log AI Response
+        FM->>FR: 12b. Return AI Answer (is_faq: false)
+        FR->>WC: AI Response
+        WC->>U: 13. Display AI Answer
+    end
+```
+
+#### 3.2.3 Admin Management Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant A as Admin
+    participant AP as Admin Panel
+    participant FR as Flask Router
+    participant DB as Database
+
+    Note over A, DB: Admin FAQ Management Flow
+    
+    A->>AP: 1. Access Admin Panel
+    AP->>FR: 2. POST /admin/login
+    FR->>DB: 3. Authenticate Admin
+    DB-->>FR: Validation Result
+    FR->>AP: 4. Admin Dashboard
+    AP->>A: Display Management Interface
+    
+    A->>AP: 5. Manage FAQs (CRUD Operations)
+    AP->>FR: 6. FAQ Operations Request
+    
+    alt Create FAQ
+        FR->>DB: Insert New FAQ
+        DB-->>FR: Confirmation
+    else Update FAQ
+        FR->>DB: Update FAQ Record
+        DB-->>FR: Confirmation
+    else Delete FAQ
+        FR->>DB: Remove FAQ
+        DB-->>FR: Confirmation
+    else Read FAQs
+        FR->>DB: Query FAQs
+        DB-->>FR: FAQ Data
+    end
+    
+    FR->>AP: 8. Real-time Update
+    AP->>A: Updated Interface
+    
+    Note over A, DB: Changes are immediately available<br/>for user queries without restart
+```
+
+#### 3.2.4 Analytics and Monitoring Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Admin
+    participant AD as Analytics Dashboard
+    participant FR as Flask Router
+    participant DB as Database
+    participant QP as Query Processor
+
+    Note over A, QP: Analytics and Performance Monitoring
+    
+    A->>AD: 1. Access Analytics
+    AD->>FR: 2. Request Analytics Data
+    FR->>DB: 3. Query Usage Statistics
+    
+    par Parallel Analytics Queries
+        DB-->>FR: Popular Questions
+    and
+        DB-->>FR: FAQ vs AI Usage Ratio
+    and
+        DB-->>FR: Response Time Metrics
+    and
+        DB-->>FR: User Satisfaction Data
+    end
+    
+    FR->>QP: 4. Process Analytics Data
+    QP->>QP: Calculate Performance Metrics
+    QP-->>FR: Processed Analytics
+    FR->>AD: 5. Return Dashboard Data
+    AD->>A: Display Analytics Dashboard
+    
+    Note over A: Real-time insights:<br/>• Popular question trends<br/>• System performance<br/>• FAQ effectiveness<br/>• User engagement patterns
 ```
 
 ### 3.3 Implementation Details
